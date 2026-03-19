@@ -1,0 +1,65 @@
+name: Build IPK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # 允许手动点击按钮触发编译
+
+jobs:
+  build:
+    name: Build for OpenWrt
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 这里列出你想编译的架构，常用的有 x86_64, aarch64_generic, arm_cortex-a9
+        arch: [x86_64, aarch64_generic]
+        include:
+          - arch: x86_64
+            sdk_url: "https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          - arch: aarch64_generic
+            sdk_url: "https://downloads.openwrt.org/releases/23.05.3/targets/armsr/armv8/openwrt-sdk-23.05.3-armsr-armv8_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SDK
+        run: |
+          wget -q ${{ matrix.sdk_url }} -O sdk.tar.xz
+          mkdir -p sdk
+          tar -xJf sdk.tar.xz -C sdk --strip 1
+
+      - name: Prepare Build
+        run: |
+          # 将我们的软件包放入 SDK 的 package 目录
+          mkdir -p sdk/package/luci-app-gameboost
+          cp -r $(pwd)/Makefile $(pwd)/files $(pwd)/luasrc sdk/package/luci-app-gameboost/
+          
+          # 更新 feeds
+          cd sdk
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Build Package
+        id: build
+        run: |
+          cd sdk
+          # 配置为仅编译我们的包
+          echo "CONFIG_PACKAGE_luci-app-gameboost=m" > .config
+          make defconfig
+          
+          # 开始编译 (V=s 显示详细日志)
+          make package/luci-app-gameboost/compile V=s -j$(nproc) || make package/luci-app-gameboost/compile V=s -j1
+          
+          # 找到生成的 ipk 文件
+          OUTPUT_DIR=$(pwd)/bin/packages
+          IPK_FILE=$(find $OUTPUT_DIR -name "luci-app-gameboost*.ipk" | head -n 1)
+          echo "ipk_path=$IPK_FILE" >> $GITHUB_OUTPUT
+          echo "arch_name=${{ matrix.arch }}" >> $GITHUB_OUTPUT
+
+      - name: Upload IPK
+        uses: actions/upload-artifact@v4
+        with:
+          name: luci-app-gameboost-${{ matrix.arch }}
+          path: ${{ steps.build.outputs.ipk_path }}
