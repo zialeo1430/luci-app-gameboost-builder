@@ -19,7 +19,6 @@ jobs:
 
       - name: Prepare OpenWrt SDK
         run: |
-          # 使用与您固件版本匹配的 openwrt-24.10 分支
           git clone --depth 1 -b openwrt-24.10 https://github.com/openwrt/openwrt.git sdk
           cd sdk
 
@@ -27,16 +26,20 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-          # 手动设置目标平台为 mediatek/filogic（您的路由器架构）
+          # 设置目标平台
           echo "CONFIG_TARGET_mediatek=y" >> .config
           echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
           echo "CONFIG_TARGET_ARCH_PACKAGES=aarch64_cortex-a53" >> .config
           make defconfig
 
-          # 创建插件目录并复制源码（假设仓库根目录有 files/、luasrc/ 和 Makefile）
+          # 构建 host 工具和工具链（解决 libdeflate-gzip 缺失）
+          make tools/install -j$(nproc)
+          make toolchain/install -j$(nproc)
+
+          # 创建插件目录并复制源码（注意路径修正）
           mkdir -p package/${{ env.PKG_NAME }}
-          cp -r ../files ./ 2>/dev/null || echo "No files/ directory"
-          cp -r ../luasrc ./ 2>/dev/null || echo "No luasrc/ directory"
+          cp -r ../files package/${{ env.PKG_NAME }}/ 2>/dev/null || echo "No files/ directory"
+          cp -r ../luasrc package/${{ env.PKG_NAME }}/ 2>/dev/null || echo "No luasrc/ directory"
           cp ../Makefile package/${{ env.PKG_NAME }}/Makefile
 
           # 确保插件被选中
@@ -46,7 +49,6 @@ jobs:
       - name: Compile
         run: |
           cd sdk
-          # 编译您的插件
           make package/${{ env.PKG_NAME }}/compile V=s -j$(nproc)
 
       - name: Upload IPK
