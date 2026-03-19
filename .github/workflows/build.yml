@@ -1,4 +1,4 @@
-name: Build GameBoost IPK
+name: Build GameBoost IPK (Container)
 
 on:
   push:
@@ -6,53 +6,36 @@ on:
   workflow_dispatch:
 
 env:
-  TARGET: mediatek/filogic
-  ARCH: aarch64_cortex-a53
   PKG_NAME: luci-app-gameboost
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 使用针对您路由器架构（mediatek/filogic）的预编译 SDK 镜像
+    container:
+      image: openwrt/sdk:mediatek-filogic-24.10
     steps:
-      - name: Checkout source
+      - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Prepare OpenWrt SDK
+      - name: Copy source to SDK package directory
         run: |
-          git clone --depth 1 -b openwrt-24.10 https://github.com/openwrt/openwrt.git sdk
-          cd sdk
-
-          # 更新 feeds
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-
-          # 设置目标平台
-          echo "CONFIG_TARGET_mediatek=y" >> .config
-          echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
-          echo "CONFIG_TARGET_ARCH_PACKAGES=aarch64_cortex-a53" >> .config
-          make defconfig
-
-          # 构建 host 工具和工具链（解决 libdeflate-gzip 缺失）
-          make tools/install -j$(nproc)
-          make toolchain/install -j$(nproc)
-
-          # 创建插件目录并复制源码（注意路径修正）
+          # 在 SDK 容器内创建插件目录
           mkdir -p package/${{ env.PKG_NAME }}
-          cp -r ../files package/${{ env.PKG_NAME }}/ 2>/dev/null || echo "No files/ directory"
-          cp -r ../luasrc package/${{ env.PKG_NAME }}/ 2>/dev/null || echo "No luasrc/ directory"
-          cp ../Makefile package/${{ env.PKG_NAME }}/Makefile
-
-          # 确保插件被选中
+          # 复制您的源码（假设仓库根目录有 files/、luasrc/ 和 Makefile）
+          cp -r files package/${{ env.PKG_NAME }}/ 2>/dev/null || echo "No files/ directory"
+          cp -r luasrc package/${{ env.PKG_NAME }}/ 2>/dev/null || echo "No luasrc/ directory"
+          cp Makefile package/${{ env.PKG_NAME }}/Makefile
+          # 配置选中您的插件
           echo "CONFIG_PACKAGE_${{ env.PKG_NAME }}=y" >> .config
           make defconfig
 
       - name: Compile
         run: |
-          cd sdk
           make package/${{ env.PKG_NAME }}/compile V=s -j$(nproc)
 
       - name: Upload IPK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PKG_NAME }}-${{ env.ARCH }}
-          path: sdk/bin/packages/**/*.ipk
+          name: ${{ env.PKG_NAME }}-aarch64_cortex-a53
+          path: bin/packages/aarch64_cortex-a53/**/*.ipk
