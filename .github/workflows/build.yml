@@ -19,30 +19,34 @@ jobs:
 
       - name: Prepare OpenWrt SDK
         run: |
-          # 使用与您固件版本匹配的分支（24.10）
+          # 使用与您固件版本匹配的 openwrt-24.10 分支
           git clone --depth 1 -b openwrt-24.10 https://github.com/openwrt/openwrt.git sdk
           cd sdk
-          # 更新并安装所有 feeds
+
+          # 更新 feeds
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          # 手动安装 LuCI 基础库（避免缺失警告）
-          ./scripts/feeds install luci-lib-nixio
-          ./scripts/feeds install luci-lib-jsonc
-          ./scripts/feeds install luci-lib-ip
-          ./scripts/feeds install luci-mod-admin-full
-          # 创建插件目录并复制源码
+
+          # 手动设置目标平台为 mediatek/filogic（您的路由器架构）
+          echo "CONFIG_TARGET_mediatek=y" >> .config
+          echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
+          echo "CONFIG_TARGET_ARCH_PACKAGES=aarch64_cortex-a53" >> .config
+          make defconfig
+
+          # 创建插件目录并复制源码（假设仓库根目录有 files/、luasrc/ 和 Makefile）
           mkdir -p package/${{ env.PKG_NAME }}
-          # 假设您的源码在仓库根目录下包含 files/ 和 luasrc/ 以及 Makefile
-          cp -r ../files ./files 2>/dev/null || echo "No files/ directory"
-          cp -r ../luasrc ./luasrc 2>/dev/null || echo "No luasrc/ directory"
+          cp -r ../files ./ 2>/dev/null || echo "No files/ directory"
+          cp -r ../luasrc ./ 2>/dev/null || echo "No luasrc/ directory"
           cp ../Makefile package/${{ env.PKG_NAME }}/Makefile
-          # 配置选中插件
+
+          # 确保插件被选中
           echo "CONFIG_PACKAGE_${{ env.PKG_NAME }}=y" >> .config
           make defconfig
 
       - name: Compile
         run: |
           cd sdk
+          # 编译您的插件
           make package/${{ env.PKG_NAME }}/compile V=s -j$(nproc)
 
       - name: Upload IPK
