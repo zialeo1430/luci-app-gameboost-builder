@@ -14,17 +14,29 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
 
       - name: Prepare OpenWrt SDK
         run: |
-          git clone --depth 1 -b openwrt-23.05 https://github.com/openwrt/openwrt.git sdk
+          # 使用与您固件版本匹配的分支（24.10）
+          git clone --depth 1 -b openwrt-24.10 https://github.com/openwrt/openwrt.git sdk
           cd sdk
+          # 更新并安装所有 feeds
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          cp -r ../files ./
+          # 手动安装 LuCI 基础库（避免缺失警告）
+          ./scripts/feeds install luci-lib-nixio
+          ./scripts/feeds install luci-lib-jsonc
+          ./scripts/feeds install luci-lib-ip
+          ./scripts/feeds install luci-mod-admin-full
+          # 创建插件目录并复制源码
+          mkdir -p package/${{ env.PKG_NAME }}
+          # 假设您的源码在仓库根目录下包含 files/ 和 luasrc/ 以及 Makefile
+          cp -r ../files ./files 2>/dev/null || echo "No files/ directory"
+          cp -r ../luasrc ./luasrc 2>/dev/null || echo "No luasrc/ directory"
           cp ../Makefile package/${{ env.PKG_NAME }}/Makefile
+          # 配置选中插件
           echo "CONFIG_PACKAGE_${{ env.PKG_NAME }}=y" >> .config
           make defconfig
 
