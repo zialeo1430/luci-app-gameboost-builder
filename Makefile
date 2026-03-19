@@ -12,8 +12,9 @@ PKG_RELEASE:=1
 PKG_MAINTAINER:=Your Name <your@email.com>
 PKG_LICENSE:=GPL-2.0
 
-LUCI_TITLE:=LuCI support for GameBoost (Watt Toolkit like accelerator)
-LUCI_DEPENDS:=+dnsmasq-full +curl +ca-certificates
+LUCI_TITLE:=LuCI support for Gameboost (Matt Toolkit like accelerator)
+# 关键修改：把 dnsmasq-full 改为 dnsmasq
+LUCI_DEPENDS:=+dnsmasq +curl +ca-certificates
 LUCI_PKGARCH:=all
 
 define Package/$(PKG_NAME)/conffiles
