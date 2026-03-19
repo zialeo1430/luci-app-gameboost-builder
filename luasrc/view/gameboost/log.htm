@@ -1,0 +1,13 @@
+<%+header%>
+<h2><%:GameBoost 日志%></h2>
+<pre style="background:#f0f0f0; padding:10px; overflow:auto; max-height:600px;"><%
+local log = luci.sys.exec("tail -n 200 /var/log/gameboost.log")
+write(log)
+%></pre>
+<div class="cbi-page-actions">
+    <form method="post" action="<%=luci.dispatcher.build_url("admin/services/gameboost/log/clear")%>">
+        <input class="cbi-button cbi-button-reset" type="submit" value="<%:清空日志%>" />
+    </form>
+    <a href="<%=luci.dispatcher.build_url("admin/services/gameboost")%>"><%:返回配置%></a>
+</div>
+<%+footer%>
