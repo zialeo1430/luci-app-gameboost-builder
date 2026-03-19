@@ -1,4 +1,4 @@
-name: Build GameBoost IPK (with caching)
+name: Build GameBoost IPK (using prebuilt SDK)
 
 on:
   push:
@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
 
 env:
-  TARGET: mediatek/filogic
-  ARCH: aarch64_cortex-a53
   PKG_NAME: luci-app-gameboost
+  # 使用 OpenWrt 24.10 SDK 下载链接（如果无效请告知，可改用 23.05 版本）
+  SDK_URL: https://downloads.openwrt.org/releases/24.10.0/targets/mediatek/filogic/openwrt-sdk-24.10.0-mediatek-filogic_gcc-13.3.0_musl.Linux-x86_64.tar.xz
 
 jobs:
   build:
@@ -17,41 +17,20 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Prepare OpenWrt SDK
+      - name: Download and extract OpenWrt SDK
         run: |
-          git clone --depth 1 -b openwrt-24.10 https://github.com/openwrt/openwrt.git sdk
+          wget -q ${{ env.SDK_URL }} -O sdk.tar.xz
+          tar -xf sdk.tar.xz
+          mv openwrt-sdk-* sdk
           cd sdk
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          echo "CONFIG_TARGET_mediatek=y" >> .config
-          echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
-          echo "CONFIG_TARGET_ARCH_PACKAGES=aarch64_cortex-a53" >> .config
-          make defconfig
-
-      - name: Cache tools and toolchain
-        id: cache-toolchain
-        uses: actions/cache@v4
-        with:
-          path: |
-            sdk/staging_dir/host
-            sdk/staging_dir/toolchain-*
-            sdk/build_dir/target-*
-          key: ${{ runner.os }}-sdk-${{ env.TARGET }}-${{ env.ARCH }}-${{ hashFiles('sdk/.config') }}
-          restore-keys: |
-            ${{ runner.os }}-sdk-${{ env.TARGET }}-${{ env.ARCH }}-
-
-      - name: Build tools and toolchain (if cache miss)
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          cd sdk
-          make tools/install -j$(nproc)
-          make toolchain/install -j$(nproc)
 
       - name: Copy source to package directory
         run: |
           cd sdk
           mkdir -p package/${{ env.PKG_NAME }}
-          # 复制源码（根据您的仓库结构调整路径）
+          # 复制您的源码（根据实际目录调整）
           cp -r ../files package/${{ env.PKG_NAME }}/ 2>/dev/null || echo "No files/ directory"
           cp -r ../luasrc package/${{ env.PKG_NAME }}/ 2>/dev/null || echo "No luasrc/ directory"
           cp ../Makefile package/${{ env.PKG_NAME }}/Makefile
@@ -66,5 +45,5 @@ jobs:
       - name: Upload IPK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PKG_NAME }}-${{ env.ARCH }}
-          path: sdk/bin/packages/**/*.ipk
+          name: ${{ env.PKG_NAME }}-aarch64_cortex-a53
+          path: sdk/bin/packages/aarch64_cortex-a53/**/*.ipk
