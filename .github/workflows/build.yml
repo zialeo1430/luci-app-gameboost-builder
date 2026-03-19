@@ -1,73 +1,40 @@
-name: Build IPK for Filogic (MT798x)
+name: Build GameBoost IPK
+
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  TARGET: mediatek/filogic
+  ARCH: aarch64_cortex-a53
+  PKG_NAME: luci-app-gameboost
+
 jobs:
   build:
-    name: Build OpenWrt IPK
-    runs-on: ubuntu-22.04
-    env:
-      TARGET: mediatek/filogic
-      ARCH: aarch64_cortex-a53
-      PKG_NAME: luci-app-gameboost
-      SDK_URL: https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-sdk-23.05.3-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64.tar.xz
-
+    runs-on: ubuntu-latest
     steps:
-      - name: 检出代码
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 配置Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: 安装依赖
+      - name: Prepare OpenWrt SDK
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential flex bison g++ gawk libncurses5-dev libssl-dev python3-distutils rsync unzip wget
-
-      - name: 下载SDK
-        run: |
-          wget -q "$SDK_URL" -O sdk.tar.xz
-          mkdir -p sdk
-          tar -xJf sdk.tar.xz -C sdk --strip 1
-
-      - name: 初始化SDK
-        run: |
+          git clone --depth 1 -b openwrt-23.05 https://github.com/openwrt/openwrt.git sdk
           cd sdk
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+          cp -r ../files ./
+          cp ../Makefile package/${{ env.PKG_NAME }}/Makefile
+          echo "CONFIG_PACKAGE_${{ env.PKG_NAME }}=y" >> .config
+          make defconfig
 
-      - name: 复制插件到SDK
-        run: |
-          mkdir -p sdk/package/$PKG_NAME
-          cp -r Makefile files luasrc sdk/package/$PKG_NAME/
-          # 给脚本加执行权限
-          chmod +x sdk/package/$PKG_NAME/files/etc/init.d/*
-          chmod +x sdk/package/$PKG_NAME/files/etc/uci-defaults/*
-          chmod +x sdk/package/$PKG_NAME/files/etc/gameboost/*.sh
-
-      - name: 编译IPK
-        id: build
+      - name: Compile
         run: |
           cd sdk
-          echo "CONFIG_PACKAGE_$PKG_NAME=m" > .config
-          make defconfig
-          make package/$PKG_NAME/compile V=s -j1
-          # 查找生成的IPK
-          IPK=$(find ./bin/packages/$ARCH/base -name "$PKG_NAME*.ipk" | head -n 1)
-          if [ -f "$IPK" ]; then
-            echo "ipk_path=$IPK" >> $GITHUB_OUTPUT
-          else
-            echo "编译失败，未找到IPK"
-            ls -la ./bin/packages/$ARCH/base/
-            exit 1
-          fi
+          make package/${{ env.PKG_NAME }}/compile V=s -j$(nproc)
 
-      - name: 上传IPK
+      - name: Upload IPK
         uses: actions/upload-artifact@v4
         with:
-          name: $PKG_NAME-filogic
-          path: sdk/${{ steps.build.outputs.ipk_path }}
+          name: ${{ env.PKG_NAME }}-${{ env.ARCH }}
+          path: sdk/bin/packages/**/*.ipk
